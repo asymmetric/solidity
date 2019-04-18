@@ -23,8 +23,8 @@
 using namespace std;
 using namespace yul;
 
-WasmDialect::WasmDialect(AsmFlavour _flavour):
-	Dialect{_flavour}
+WasmDialect::WasmDialect():
+	Dialect{AsmFlavour::Strict}
 {
 	for (auto const& name: {
 		"i64.add",
