@@ -44,7 +44,10 @@ string EWasmCodeTransform::run(Dialect const& _dialect, yul::Block const& _ast)
 
 	for (auto const& statement: _ast.statements)
 	{
-		yulAssert(statement.type() == typeid(yul::FunctionDefinition), "");
+		yulAssert(
+			statement.type() == typeid(yul::FunctionDefinition),
+			"Expected only function definitions at the highest level."
+		);
 		functions.emplace_back(transform.translateFunction(boost::get<yul::FunctionDefinition>(statement)));
 	}
 
@@ -150,13 +153,46 @@ wasm::Expression EWasmCodeTransform::operator()(yul::Instruction const&)
 
 wasm::Expression EWasmCodeTransform::operator()(If const& _if)
 {
-	return wasm::If{visit(*_if.condition), visit(_if.body.statements)};
+	return wasm::If{visit(*_if.condition), visit(_if.body.statements), {}};
 }
 
-wasm::Expression EWasmCodeTransform::operator()(Switch const&)
+wasm::Expression EWasmCodeTransform::operator()(Switch const& _switch)
 {
-	solUnimplementedAssert(false, "");
-	return {};
+	wasm::Block block;
+	string condition = m_nameDispenser.newName("condition"_yulstring).str();
+	m_localVariables.emplace_back(wasm::VariableDeclaration{condition});
+	block.statements.emplace_back(wasm::LocalAssignment{condition, visit(*_switch.expression)});
+
+	vector<wasm::Expression>* currentBlock = &block.statements;
+	for (size_t i = 0; i < _switch.cases.size(); ++i)
+	{
+		Case const& c = _switch.cases.at(i);
+		if (c.value)
+		{
+			wasm::BuiltinCall comparison{"i64.eq", {}};
+			comparison.arguments.emplace_back(wasm::LocalVariable{condition});
+			comparison.arguments.emplace_back(visitReturnByValue(*c.value));
+			wasm::If ifStmnt{
+				make_unique<wasm::Expression>(std::move(comparison)),
+				visit(c.body.statements),
+				{}
+			};
+			vector<wasm::Expression>* nextBlock = nullptr;
+			if (i != _switch.cases.size() - 1)
+			{
+				ifStmnt.elseStatements = make_unique<vector<wasm::Expression>>();
+				nextBlock = ifStmnt.elseStatements.get();
+			}
+			currentBlock->emplace_back(std::move(ifStmnt));
+			currentBlock = nextBlock;
+		}
+		else
+		{
+			yulAssert(i == _switch.cases.size() - 1, "Default case must be last.");
+			*currentBlock += visit(c.body.statements);
+		}
+	}
+	return std::move(block);
 }
 
 wasm::Expression EWasmCodeTransform::operator()(FunctionDefinition const&)
