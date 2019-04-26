@@ -8,6 +8,7 @@ Important Bugfixes:
 Language Features:
  * ABIEncoderV2: Implement encoding of calldata arrays and structs.
  * Code Generation: Implement copying recursive structs from storage to memory.
+ * Static Analyzer: Disallow libraries calling themselves externally.
  * Yul: Disallow function definitions inside for-loop init blocks.
 
 
