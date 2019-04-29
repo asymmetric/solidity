@@ -48,6 +48,13 @@ class regressor():
                        help="""Directory where test results will be written""")
         return argParser.parse_args(args)
 
+    """
+        Runs command in bash shell logging stdout/err to logfile and
+        returning exit status (0-255) of the command.
+        Exit status:
+            0       -> Success
+            1-255   -> Failure
+    """
     @staticmethod
     def run_cmd(command, logfile=None, env=None):
         if not logfile:
@@ -62,10 +69,7 @@ class regressor():
                                 stderr=subprocess.STDOUT)
         ret = proc.wait()
         logfh.close()
-
-        if ret != 0:
-            return False
-        return True
+        return ret
 
     def process_log(self, logfile):
         ## Log may contain non ASCII characters, so we simply stringify them
@@ -77,31 +81,35 @@ class regressor():
         return not rv, numSuppressedLeaks
 
     def run(self):
+        testStatus = []
         for fuzzer in glob.iglob("{}/*_ossfuzz".format(self._fuzzer_path)):
             basename = os.path.basename(fuzzer)
             logfile = os.path.join(self._logpath, "{}.log".format(basename))
             corpus_dir = "/tmp/solidity-fuzzing-corpus/{0}_seed_corpus" \
                 .format(basename)
-            cmd = "find {0} -type f | xargs -P2 {1}".format(corpus_dir, fuzzer)
-            if not self.run_cmd(cmd, logfile=logfile):
+            cmd = "find {0} -type f | xargs -n1 {1}".format(corpus_dir, fuzzer)
+            cmd_status = self.run_cmd(cmd, logfile=logfile)
+            if cmd_status:
                 ret, numLeaks = self.process_log(logfile)
                 if not ret:
                     print(
-                        "\t[-] AddressSanitizer reported failure for {0}. "
+                        "\t[-] libFuzzer reported failure for {0}. "
                         "Failure logged to test_results".format(
                             basename))
-                    return False
+                    testStatus.append(cmd_status)
                 else:
                     print("\t[+] {0} passed regression tests but leaked "
                           "memory.".format(basename))
                     print("\t\t[+] Suppressed {0} memory leak reports".format(
                             numLeaks))
+                    testStatus.append(0)
             else:
                 print("\t[+] {0} passed regression tests.".format(basename))
-        return True
+                testStatus.append(cmd_status)
+        return any(testStatus)
 
 
 if __name__ == '__main__':
     dotprinter = PrintDotsThread()
     tool = regressor(DESCRIPTION, sys.argv[1:])
-    tool.run()
+    sys.exit(tool.run())
