@@ -22,6 +22,7 @@ Compiler Features:
  * SMTChecker: Support ``contract`` type.
  * SMTChecker: Support ``this`` as address.
  * SMTChecker: Support address members.
+ * SMTChecker: Support tuples and functions with multiple return values.
  * Standard JSON Interface: Metadata settings now re-produce the original ``"useLiteralContent"`` setting from the compilation input.
  * Yul: Adds break and continue keywords to for-loop syntax.
  * Yul: Support ``.`` as part of identifiers.
